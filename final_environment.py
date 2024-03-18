@@ -81,8 +81,9 @@ if __name__ == "__main__":
         starting_altitude = -1
         catch_time = 0
 
-        #testing: =np.add([.4, .1, -.4], ROBOT_BASE_POS)
-        posOriginal = generateBlockPos(ROBOT_BASE_POS, REACH) #Allowable Z [-.2, .35)
+        distances=[]
+
+        posOriginal = generateBlockPos(ROBOT_BASE_POS, REACH)
         starting_distance = np.linalg.norm(np.subtract(ROBOT_BASE_POS, posOriginal))
         starting_altitude = posOriginal[2]
 
@@ -129,20 +130,6 @@ if __name__ == "__main__":
         blockToBaseDistance = np.linalg.norm(np.subtract(ROBOT_BASE_POS, env.sim.data.qpos[-7:-4]))
         handToDPDistance = np.linalg.norm(np.subtract(getGripperEEFPose(env)[0], desiredPose[0:3]))
 
-        '''
-        while(iterations < 300):
-            desiredPose = [0, 0, ROBOT_BASE_POS[2], 0, -np.pi, 0]
-            jointAngles = inverseKinematics(desiredPose, env)
-            env.render()
-            iterations +=1
-    
-            currPose = np.ndarray.tolist(abomination2array(getGripperEEFPose(env)))
-            handToDPDistance = np.linalg.norm(np.subtract(currPose[0:3], desiredPose[0:3]))
-            distances = np.concatenate([distances, [handToDPDistance]])
-            fuckyou = angle(desiredPose[3:], currPose[3:])
-            angles = np.concatenate([angles, [fuckyou]])
-    
-        '''
         lowBehind = (desiredPose[0] < ROBOT_BASE_POS[0] and desiredPose[2] < ROBOT_BASE_POS[2])
         goToVia1 = False
         goToVia2 = False
@@ -155,6 +142,8 @@ if __name__ == "__main__":
         chase = False
         while (blockToHandDistance > .05 and iterations < 500):
 
+            if iterations == 3:
+                time.sleep(2)
             env.sim.data.qvel[-6:-3] = speeds #RELATIVE TO THE BLOCK
             env.sim.data.qvel[-3:] = 0 #no spinning out of control when hit
             env.sim.step() #makes the block move.
@@ -164,7 +153,7 @@ if __name__ == "__main__":
             handToDPDistance = np.linalg.norm(np.subtract(getGripperEEFPose(env)[0], desiredPose[0:3]))
 
 
-            #distances = np.concatenate([distances, [blockToHandDistance]])
+            distances = np.concatenate([distances, [blockToHandDistance]])
 
             '''
             if blockToBaseDistance < REACH and goToVia:
@@ -197,6 +186,12 @@ if __name__ == "__main__":
             env.render()
             iterations+=1
             catch_time = iterations
+        plt.plot(range(len(distances)), distances)
+        plt.title("Target-to-gripper distance over time")
+        plt.xlabel("Time (Ticks = sec/60)")
+        plt.ylabel("Target-to-gripper distance (meters)")
+        plt.show()
+
         if iterations < 500:
             catch_times = np.concatenate([catch_times, [catch_time]])
             distances_final = np.concatenate([distances_final, [starting_distance]])
@@ -207,6 +202,7 @@ if __name__ == "__main__":
         else:
             failures += 1
             print(str(failures) + " Failures")
+        time.sleep(3)
         env.reset()
     fig, (ax1, ax2, ax3) = plt.subplots(3)
 
