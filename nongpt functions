@@ -1,0 +1,68 @@
+#This fucking function keeps extending the arm all the way in the direction of the block's movement, hitting a singularity, and spazzing out.
+def predictCatchPosition(blockPosition, blockVelocity, env=[]):
+    robotBasePose = (env.robots[0].base_pos, env.robots[0].base_ori)
+    initialJointAngles= env.robots[0]._joint_positions
+    currThetas = initialJointAngles
+    currPose = abomination2array(getGripperEEFPose(env, currThetas))
+
+    blockSpeed = np.linalg.norm(blockVelocity)
+    maxReach = .85 #850 mm is maximum reach of UR5e, accd. datasheet
+
+    #The final version will involve determining when the block comes within reach and checking
+    #until it goes out of reach, but for now I'm just using a for loop 1-1000
+    minDistance = np.linalg.norm(blockPosition - currPose[0:3])
+    closestPose = blockPosition
+    for i in range(1000):
+        pos = blockPosition + np.multiply(blockVelocity, float(i) / 1000.0)
+        dist = np.linalg.norm(pos - currPose[0:3])
+        if dist < minDistance:
+            minDistance = dist
+            closestPose = pos
+    return closestPose #[x, y, z]
+
+def inverseKinematics(DesiredPose_in_U = (np.zeros(3,), np.array([0., 0., 0., 1.])), env = []):
+    # These two OPTIONAL helper functions will actually set the angles and get you the gripper endeffector pose and jacobian.
+    #  "getGripperEEFPose" is actually moving the robot in the simulation but it does not render it. This works as a forward kinematics function. If you want to see the new robot pose, add: env.render()
+    # "getJacobian(env)" returns the Jacobian computed for the gripper end-effector which is different from what you get in HW3.
+
+    #getGripperEEFPose(env, setJointAngles)
+    #getJacobian(env)
+
+
+    # We will bring the robot back to original pose at the end of "inverseKinematics" function, because it is inteded to compute the joint angles, not execute the joint angles.
+    # But it is not required for you to implement it.
+
+    # Tuple of position and orientation (quat) of the base frame expressed in world frame
+    robotBasePose = (env.robots[0].base_pos, env.robots[0].base_ori)
+    initialJointAngles= env.robots[0]._joint_positions
+    jointAngles = initialJointAngles.copy()
+
+    dp = abomination2array(DesiredPose_in_U)
+
+    #=============NOTE TO SELF: ABOMINATION2ARRAY ALL THE POSES=======================
+    currThetas = initialJointAngles
+    currPose = abomination2array(getGripperEEFPose(env, currThetas))
+    error = dp-currPose #calcError(dp, currPose)
+
+    J = getJacobian(env)  # Jacobian changes based on position
+    deltaTheta = np.linalg.lstsq(J, error, rcond=None)[0]
+
+
+    deltaTheta = deltaTheta * reduction
+    for i in range(len(deltaTheta)):
+        if deltaTheta[i] > maxJointRotation:
+            deltaTheta[i]=maxJointRotation
+        elif deltaTheta[i] < -maxJointRotation:
+            deltaTheta[i]=-maxJointRotation
+
+    currThetas = currThetas + deltaTheta
+    updateGripperEEFPose(env, currThetas)
+
+    currPose = abomination2array(getGripperEEFPose(env, currThetas))
+    error = dp - currPose
+    global errorGlobal
+    errorGlobal= error[0]
+    print("errors: " + str(np.linalg.norm(error[0:3])) + " " + str(error[3:]))
+
+    # ==========================================
+    return currThetas

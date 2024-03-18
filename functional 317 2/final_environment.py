@@ -2,7 +2,6 @@
 This script shows you how to select gripper for an environment.
 This is controlled by gripper_type keyword argument.
 """
-import matplotlib.pyplot
 import matplotlib.pyplot as plt
 import mujoco
 import numpy as np
@@ -65,17 +64,15 @@ if __name__ == "__main__":
 
     env.robots[0].set_robot_joint_positions([0, -np.pi/2, np.pi/2, np.pi/2, np.pi/2, -np.pi/2])
 
-    successes = 0
-    failures = 0
+    total_loops = 0
     catch_times = []
     distances_final = []
-    starting_speeds = []
     starting_altitudes = []
     success = False
     starting_distance = -1
 
 
-    while successes + failures < 1000:
+    while total_loops < 1000:
         success = False
         starting_distance = -1
         starting_altitude = -1
@@ -83,6 +80,7 @@ if __name__ == "__main__":
 
         #testing: =np.add([.4, .1, -.4], ROBOT_BASE_POS)
         posOriginal = generateBlockPos(ROBOT_BASE_POS, REACH) #Allowable Z [-.2, .35)
+        print(str(posOriginal))
         starting_distance = np.linalg.norm(np.subtract(ROBOT_BASE_POS, posOriginal))
         starting_altitude = posOriginal[2]
 
@@ -104,24 +102,24 @@ if __name__ == "__main__":
         #This loop defines a velocity so that the block always comes within reach of the arm.
         #I was considering doing some insane geometry and trig, then I just realized this is easier.
         #Also checks that it actually does move.
-
-        attempts = 0
         while True:
             speeds = np.multiply(np.multiply(-.8, iCantConvertBoolDirectlyToFloat), [np.random.rand(), np.random.rand(), np.random.rand()])
             desiredPoseAndReach = predictCatchPosition(posOriginal, speeds, boxOri, env) - np.concatenate([env.table_offset, [0,0,0,0]])
             dist = desiredPoseAndReach[-1]
             temp = np.concatenate([ROBOT_BASE_POS, [0, 0, 0]])
             desiredPose = np.add(desiredPoseAndReach[:-1], temp)
-            outOfReach = (dist > REACH-.2)
+            outOfReach = (dist > REACH-.1)
             circleAroundPole = np.linalg.norm(np.subtract(desiredPose[:2],  ROBOT_BASE_POS[:2]))
-            tooClose = (circleAroundPole < .3)
-            attempts +=1
+            tooClose = (circleAroundPole < .4)
+            slow = False#(abs(np.linalg.norm(speeds)) < .1)
 
-            if (not outOfReach and not tooClose):
+            if (not outOfReach and not slow and not tooClose):
                 break
-            if attempts >= 1000:
-                break #Yeah, it's gonna miss, but we knew that
 
+
+
+        #distances = []
+        #angles = []
         iterations = 0
 
         desiredPose = np.concatenate([env.sim.data.qpos[-7:-4], [0, -np.pi/2, 0]])
@@ -187,12 +185,8 @@ if __name__ == "__main__":
                 else:
                     jointAngles = inverseKinematics(DesiredPose_in_U=desiredPose, env=env)
             if handToDPDistance < .1 or chase:
-                if np.linalg.norm(env.sim.data.qvel[-6:-3] > .05):
-                    desiredPose[0:3] = np.add(env.sim.data.qpos[-7:-4],
-                                              np.add(env.sim.data.qvel[-6:-3], [0, 0, 3.0]) * .05)
-                else:
-                    desiredPose[0:3] = np.add(env.sim.data.qpos[-7:-4], env.sim.data.qvel[-6:-3] * .05)
-                    #Pure trial and error
+                desiredPose[0:3] = np.add(env.sim.data.qpos[-7:-4],
+                                          np.add(env.sim.data.qvel[-6:-3], [0, 0, 3.0]) * .05) #Pure trial and error
                 chase = True
             env.render()
             iterations+=1
@@ -200,35 +194,46 @@ if __name__ == "__main__":
         if iterations < 500:
             catch_times = np.concatenate([catch_times, [catch_time]])
             distances_final = np.concatenate([distances_final, [starting_distance]])
-            starting_speeds = np.concatenate([starting_speeds, [np.linalg.norm(speeds)]])
             starting_altitudes = np.concatenate([starting_altitudes, [starting_altitude]])
-            successes+=1
-            print(str(successes) + " Successes")
-        else:
-            failures += 1
-            print(str(failures) + " Failures")
+            total_loops+=1
+            print(str(total_loops) + "Successes")
+
+            fig, (ax1, ax2) = plt.subplots(2)
+
+            # Title for subplot 1
+            ax1.set_title("Starting Distance vs Catch Time")
+
+            # Title for subplot 2
+            ax2.set_title("Starting Altitude vs Catch Time")
+
+            # Scatter plot for subplot 1
+            ax1.scatter(catch_times, distances_final)
+
+            # Labels for subplot 1
+            ax1.set_xlabel("Catch Time (Ticks = sec/30)")
+            ax1.set_ylabel("Starting Distance")
+
+            # Scatter plot for subplot 2
+            ax2.scatter(catch_times, starting_altitudes)
+
+            # Labels for subplot 2
+            ax2.set_xlabel("Catch Time (Ticks = sec/30)")
+            ax2.set_ylabel("Starting Altitude")
+
+            plt.tight_layout()  # Adjust subplot parameters to give specified padding
+            plt.show()
         env.reset()
-    fig, (ax1, ax2, ax3) = plt.subplots(3)
 
-    ax1.set_title("Starting Distance vs Catch Time")
-    ax2.set_title("Starting Speed vs Catch Time")
-    ax3.set_title("Starting Altitude vs Catch Time")
+    time.sleep(3)
 
-    ax1.scatter(catch_times, distances_final)
-    ax1.set_xlabel("Catch Time (Ticks = sec/60)")
-    ax1.set_ylabel("Starting Distance")
 
-    ax2.scatter(catch_times, starting_speeds)
-    ax2.set_xlabel("Catch Time (Ticks = sec/60)")
-    ax2.set_ylabel("Starting Speed (m/s)")
+    if (blockToHandDistance > .05):
+        print('===============================================')
+        print('Block not caught.')
+        print('===============================================')
+    else:
+        print('===============================================')
+        print('Block caught at ' + str(env.sim.data.qpos[-7:-4]))
+        print('===============================================')
 
-    ax3.scatter(catch_times, starting_altitudes)
-    ax3.set_xlabel("Catch Time (Ticks = sec/60)")
-    ax3.set_ylabel("Starting Altitude")
-
-    plt.tight_layout()
-    plt.show()
-
-    successRate = plt.bar(["Successes", "Failures", "Total Attempts"], [successes, failures, successes + failures])
-    plt.title("Success Rate")
 env.close()

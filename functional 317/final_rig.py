@@ -8,7 +8,7 @@ import copy
 
 #lol you can't make real constants in python
 maxDistanceError = 1E-2
-maxJointRotation = np.pi / 60  # 60hz sim, so that much is the maximum rotation per step
+maxJointRotation = np.pi / 30  # 30hz sim, so that much is the maximum rotation per step
 reduction = .1  # Smaller steps so it doesn't overshoot
 errorGlobal = 999
 
@@ -53,12 +53,7 @@ def inverseKinematics(DesiredPose_in_U=(np.zeros(6,)), env=[]):
     maxAngleError = np.pi / 12.0
     reduction = .025  # Smaller steps so it doesn't overshoot
 
-    singularity = False
-
-    if ((np.mod(currThetas[2], 2.0 * np.pi) < np.pi / 180.0) or (np.mod(currThetas[2], 2.0 * np.pi) > 359.0 * np.pi / 180.0)) and ((np.mod(currThetas[1], 2.0 * np.pi) < np.pi / 180.0) or (np.mod(currThetas[1], 2.0 * np.pi) > 359.0 * np.pi / 180.0)):
-        singularity = True
-
-    if(np.linalg.norm(error[0:2]) > maxDistanceError or (angle(currPose[3:], dp[3:]) > maxAngleError)) and not singularity:
+    if(np.linalg.norm(error[0:2]) > maxDistanceError or (angle(currPose[3:], dp[3:]) > maxAngleError)):
         J = getJacobian(env)  # Jacobian changes based on position
         #deltaTheta = np.linalg.lstsq(J, error, rcond=None)[0]
         # Compute position error
@@ -80,8 +75,19 @@ def inverseKinematics(DesiredPose_in_U=(np.zeros(6,)), env=[]):
         deltaTheta = np.clip(deltaTheta, -maxJointRotation, maxJointRotation)
 
         currThetas = currThetas + deltaTheta
+        if np.mod(currThetas[2], 2.0*np.pi) < np.pi/180.0:
+            currThetas[2] = np.pi/180.0 # singularity prevention
+        elif np.mod(currThetas[2], 2.0 * np.pi) > 359.0 * np.pi / 180.0:
+            currThetas[2] = 359 * np.pi / 180
+        if np.mod(currThetas[3], 2.0*np.pi) < np.pi/180.0:
+            currThetas[3] = np.pi/180.0
+        elif np.mod(currThetas[2], 2.0 * np.pi) > 359.0 * np.pi / 180.0:
+            currThetas[2] = 359.0 * np.pi / 180.0
 
         updateGripperEEFPose(env, currThetas)
+
+        dist = np.linalg.norm(error[0:2])
+        ang = angle(currPose[3:], dp[3:])
 
     return currThetas
 

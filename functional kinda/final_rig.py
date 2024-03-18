@@ -8,7 +8,7 @@ import copy
 
 #lol you can't make real constants in python
 maxDistanceError = 1E-2
-maxJointRotation = np.pi / 60  # 60hz sim, so that much is the maximum rotation per step
+maxJointRotation = np.pi / 30  # 30hz sim, so that much is the maximum rotation per step
 reduction = .1  # Smaller steps so it doesn't overshoot
 errorGlobal = 999
 
@@ -17,7 +17,11 @@ def predictCatchPosition(blockPosition, blockVelocity, blockOri, env=[]):
     initialJointAngles = env.robots[0]._joint_positions
     currPose = abomination2array(getGripperEEFPose(env))
 
-    maxReach = 0.85/2
+    #BlockVelocity is on a coordinate frame tied to the block (blockOri), that's why my predictions were so off.
+    oriMat = tfutil.quat2mat(tfutil.axisangle2quat(blockOri))
+    cameraVelocity = np.matmul(np.transpose(oriMat), blockVelocity)
+
+    maxReach = 0.85
 
     minDistance = np.linalg.norm(blockPosition - currPose[0:3])
     closestPose = blockPosition
@@ -27,14 +31,13 @@ def predictCatchPosition(blockPosition, blockVelocity, blockOri, env=[]):
         '''doesn't work for cameravelocity either'''
         dist = np.linalg.norm(np.subtract(pos, currPose[0:3]))
 
-        inside_pole = (np.sqrt(pos[0]**2 + pos[1]**2) <= .2 and pos[2] < 1)
+        inside_pole = (np.sqrt(pos[0]**2 + pos[2]**2) <= .2 and pos[1] < 0)
 
         if dist < minDistance and not inside_pole:
             minDistance = dist
             closestPose = pos
-    if minDistance < .3:
-        return np.concatenate([closestPose, blockOri, [minDistance]])
-    return [999,999,999,0,0,0,9999]
+
+    return np.concatenate([closestPose, blockOri, [minDistance]])
 
 def inverseKinematics(DesiredPose_in_U=(np.zeros(6,)), env=[]):
     robotBasePose = (env.robots[0].base_pos, env.robots[0].base_ori)
@@ -53,12 +56,7 @@ def inverseKinematics(DesiredPose_in_U=(np.zeros(6,)), env=[]):
     maxAngleError = np.pi / 12.0
     reduction = .025  # Smaller steps so it doesn't overshoot
 
-    singularity = False
-
-    if ((np.mod(currThetas[2], 2.0 * np.pi) < np.pi / 180.0) or (np.mod(currThetas[2], 2.0 * np.pi) > 359.0 * np.pi / 180.0)) and ((np.mod(currThetas[1], 2.0 * np.pi) < np.pi / 180.0) or (np.mod(currThetas[1], 2.0 * np.pi) > 359.0 * np.pi / 180.0)):
-        singularity = True
-
-    if(np.linalg.norm(error[0:2]) > maxDistanceError or (angle(currPose[3:], dp[3:]) > maxAngleError)) and not singularity:
+    if(np.linalg.norm(error[0:2]) > maxDistanceError or (angle(currPose[3:], dp[3:]) > maxAngleError)):
         J = getJacobian(env)  # Jacobian changes based on position
         #deltaTheta = np.linalg.lstsq(J, error, rcond=None)[0]
         # Compute position error
@@ -82,6 +80,9 @@ def inverseKinematics(DesiredPose_in_U=(np.zeros(6,)), env=[]):
         currThetas = currThetas + deltaTheta
 
         updateGripperEEFPose(env, currThetas)
+
+        dist = np.linalg.norm(error[0:2])
+        ang = angle(currPose[3:], dp[3:])
 
     return currThetas
 
@@ -135,8 +136,7 @@ def generateBlockPos(robot_base_pos, reach):
     random_pos = np.random.uniform(min_coord, max_coord, size=3)
 
     # Ensure the generated position is farther than REACH from the center
-    while ((np.linalg.norm(random_pos - robot_base_pos) <= reach) or random_pos[0] < robot_base_pos[0]
-           or abs(random_pos[2] - robot_base_pos[2]) > reach/2 ):
+    while np.linalg.norm(random_pos - robot_base_pos) <= reach or random_pos[1] > robot_base_pos[1]: #Problems with self-intersection when high z
         random_pos = np.random.uniform(min_coord, max_coord, size=3)
 
     return random_pos
