@@ -71,15 +71,21 @@ if __name__ == "__main__":
     distances_final = []
     starting_speeds = []
     starting_altitudes = []
+    secondMoveTimes = []
     success = False
     starting_distance = -1
 
+    firstMoveCatches = 0
+    secondMoveCatches = 0
+    onSecondMove = False
 
     while successes + failures < 1000:
+        onSecondMove = False
         success = False
         starting_distance = -1
         starting_altitude = -1
         catch_time = 0
+        secondMoveTime = 0
 
         distances=[]
 
@@ -140,10 +146,7 @@ if __name__ == "__main__":
             goToVia2 = False
 
         chase = False
-        while (blockToHandDistance > .05 and iterations < 500):
-
-            if iterations == 3:
-                time.sleep(2)
+        while (blockToHandDistance > .01 and iterations < 500):
             env.sim.data.qvel[-6:-3] = speeds #RELATIVE TO THE BLOCK
             env.sim.data.qvel[-3:] = 0 #no spinning out of control when hit
             env.sim.step() #makes the block move.
@@ -155,13 +158,6 @@ if __name__ == "__main__":
 
             distances = np.concatenate([distances, [blockToHandDistance]])
 
-            '''
-            if blockToBaseDistance < REACH and goToVia:
-                jointAngles = inverseKinematics(DesiredPose_in_U=via, env=env)
-                if handToViaDistance < .1:
-                    goToVia = False
-            el
-            '''
             if blockToBaseDistance < .85:
                 if goToVia1:
                     jointAngles = inverseKinematics(DesiredPose_in_U=via1, env=env)
@@ -182,49 +178,61 @@ if __name__ == "__main__":
                 else:
                     desiredPose[0:3] = np.add(env.sim.data.qpos[-7:-4], env.sim.data.qvel[-6:-3] * .05)
                     #Pure trial and error
-                chase = True
+                if not chase:
+                    chase = True
+                    onSecondMove = True
+                    secondMoveTime = iterations
             env.render()
             iterations+=1
             catch_time = iterations
+        '''
         plt.plot(range(len(distances)), distances)
         plt.title("Target-to-gripper distance over time")
         plt.xlabel("Time (Ticks = sec/60)")
         plt.ylabel("Target-to-gripper distance (meters)")
         plt.show()
+        '''
 
         if iterations < 500:
             catch_times = np.concatenate([catch_times, [catch_time]])
             distances_final = np.concatenate([distances_final, [starting_distance]])
             starting_speeds = np.concatenate([starting_speeds, [np.linalg.norm(speeds)]])
             starting_altitudes = np.concatenate([starting_altitudes, [starting_altitude]])
+            secondMoveTimes = np.concatenate([secondMoveTimes, [secondMoveTime]])
             successes+=1
             print(str(successes) + " Successes")
+            if not onSecondMove:
+                firstMoveCatches += 1
+            else:
+                secondMoveCatches += 1
         else:
             failures += 1
             print(str(failures) + " Failures")
-        time.sleep(3)
         env.reset()
+
     fig, (ax1, ax2, ax3) = plt.subplots(3)
 
-    ax1.set_title("Starting Distance vs Catch Time")
-    ax2.set_title("Starting Speed vs Catch Time")
-    ax3.set_title("Starting Altitude vs Catch Time")
+    ax1.set_title("Starting Distance vs Recalibration Time")
+    ax2.set_title("Starting Speed vs Recalibration Time")
+    ax3.set_title("Starting Altitude vs Recalibration Time")
 
-    ax1.scatter(catch_times, distances_final)
-    ax1.set_xlabel("Catch Time (Ticks = sec/60)")
+    ax1.scatter(secondMoveTimes, distances_final)
+    ax1.set_xlabel("Recalibration Time (Ticks = sec/60)")
     ax1.set_ylabel("Starting Distance")
 
-    ax2.scatter(catch_times, starting_speeds)
-    ax2.set_xlabel("Catch Time (Ticks = sec/60)")
+    ax2.scatter(secondMoveTimes, starting_speeds)
+    ax2.set_xlabel("Recalibration Time (Ticks = sec/60)")
     ax2.set_ylabel("Starting Speed (m/s)")
 
-    ax3.scatter(catch_times, starting_altitudes)
-    ax3.set_xlabel("Catch Time (Ticks = sec/60)")
+    ax3.scatter(secondMoveTimes, starting_altitudes)
+    ax3.set_xlabel("Recalibration Time (Ticks = sec/60)")
     ax3.set_ylabel("Starting Altitude")
 
     plt.tight_layout()
     plt.show()
-
-    successRate = plt.bar(["Successes", "Failures", "Total Attempts"], [successes, failures, successes + failures])
+    '''
+    successRate = plt.bar(["First Move", "Second Move", "Failures", "Total Attempts"], [firstMoveCatches, secondMoveCatches, failures, successes + failures])
     plt.title("Success Rate")
+    plt.show()
+    '''
 env.close()
