@@ -146,7 +146,7 @@ if __name__ == "__main__":
             goToVia2 = False
 
         chase = False
-        while (blockToHandDistance > .01 and iterations < 500):
+        while (blockToHandDistance > .05 and iterations < 500):
             env.sim.data.qvel[-6:-3] = speeds #RELATIVE TO THE BLOCK
             env.sim.data.qvel[-3:] = 0 #no spinning out of control when hit
             env.sim.step() #makes the block move.
