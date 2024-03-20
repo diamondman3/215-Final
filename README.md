@@ -1,1 +1,1 @@
-The only required code is in the files final_environment.py and final_
+The only required code is in the files final_environment.py and final_rig.py in the main directory. The remaining code, including rod_mover.py and all the subdirectories, are either unused or earlier versions of the code.
